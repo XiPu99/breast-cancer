@@ -9,19 +9,126 @@ output: html_document
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
+```{r}
+library(corrplot)
+library(rstanarm)
+```
+
+
 ## Introduction
 
 
 ## Data
 
+#### Data source
 
+The dataset used for this project is the Wisconsin Diagnostic Breast Cancer Dataset. It can be accessed from this link https://www.kaggle.com/uciml/breast-cancer-wisconsin-data and can also be found on [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29). All the data in the dataset is already in clean and workable format and there are no missing values present in the dataset.
+
+This dataset has 569 observations and 32 variables. Each observation contains information about characteristics of the cell nuclei present in a digitized image of a fine needle aspirate (FNA) of a breast mass.
+ 
+#### Data description
+
+Variable Information:
+1. ID number
+2. Diagnosis: a binary response variable that either takes value M or B (M = malignant, B = benign)
+
+__3-32)__
+
+Ten numeric values are computed for each cell nucleus:
+  1. radius (mean of distances from center to points on the perimeter)
+  2. texture (standard deviation of gray-scale values)
+  3. perimeter
+  4. area
+  5. smoothness (local variation in radius lengths)
+  6. compactness (perimeter^2 / area - 1.0)
+  7. concavity (severity of concave portions of the contour)
+  8. concave points (number of concave portions of the contour)
+  9. symmetry
+  10. fractal dimension ("coastline approximation" - 1)
+The mean, standard error and "worst" or largest (mean of the three
+largest values) of these features were computed for each image,
+resulting in 30 variables. For instance, field 3 is Mean Radius, field
+13 is Radius SE, field 23 is Worst Radius.
+
+#### Exploratory data analysis
+
+It’s important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset.
+
+```{r fig.height=7}
+data <- read.csv("data.csv")
+corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
+```
+
+As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is the model is not interpretable. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we loose that advantage. So, instead, we use Variance inflation factor (VIF) as the criteria to remove multicollinearity.
+
+## Model
+
+
+This is posterior distribution that stan_glm will draw from when using MCMC.
 
 ```{r}
-data <- read.csv("data.csv")
+SEED=20200425
+t_prior <- student_t(df = 1, location = 0, scale = 5)
+post1 <- stan_glm(diagnosis ~ ., data = data[,-1],
+                 family = binomial(link = "logit"), 
+                 prior = t_prior, prior_intercept = t_prior, QR=TRUE,
+                 seed = SEED, iter = 2000, chain = 1)
 ```
 
 
-## Model
+```{r}
+car::vif(post1)
+```
+
+Remove all predictors that have relatively high VIF values:
+
+```{r}
+post2 <- stan_glm(diagnosis ~ symmetry_mean + texture_se +
+                    smoothness_se + symmetry_se + smoothness_mean, data = data[,-1],
+                 family = binomial(link = "logit"), 
+                 prior = t_prior, prior_intercept = t_prior, QR=TRUE,
+                 seed = SEED, iter = 2000, chain = 1)
+```
+
+
+```{r}
+#library(ggplot2)
+#pplot <- plot(post2, "areas", prob = 0.95, prob_outer = 1)
+#pplot + geom_vline(xintercept = 0)
+```
+
+
+```{r}
+round(coef(post2), 2)
+round(posterior_interval(post2, prob = 0.9), 2)
+car::vif(post2)
+```
+
+## Model diagnostics
+
+```{r}
+library("bayesplot")
+color_scheme_set("red")
+mcmc_trace(post2, pars = c("texture_se"))
+mcmc_trace(post2, pars = c("symmetry_mean"))
+```
+
+```{r}
+mcmc_acf(post2, pars = "symmetry_mean", lags = 10)
+mcmc_acf(post2, pars = "texture_se", lags = 10)
+```
+
+
+
+```{r}
+#mcmc_areas(
+#  post2,
+#  pars = c("symmetry_mean", "texture_se"),
+#  prob = 0.8, # 80% intervals
+#  prob_outer = 0.99, # 99%
+#  point_est = "mean"
+#)
+```
 
 
 ## Results
