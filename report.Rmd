@@ -6,12 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 ```
 
 ```{r}
 library(corrplot)
 library(rstanarm)
+library(patchwork)
+library(bayesplot)
 ```
 
 
@@ -63,16 +65,15 @@ As we can see from the plot above, some predictors are highly correlated. One wa
 
 ## Model
 
-
 This is posterior distribution that stan_glm will draw from when using MCMC.
 
-```{r}
+```{r cache=TRUE}
 SEED=20200425
 t_prior <- student_t(df = 1, location = 0, scale = 5)
 post1 <- stan_glm(diagnosis ~ ., data = data[,-1],
                  family = binomial(link = "logit"), 
                  prior = t_prior, prior_intercept = t_prior, QR=TRUE,
-                 seed = SEED, iter = 2000, chain = 1)
+                 seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
 
@@ -82,12 +83,12 @@ car::vif(post1)
 
 Remove all predictors that have relatively high VIF values:
 
-```{r}
+```{r cache=TRUE}
 post2 <- stan_glm(diagnosis ~ symmetry_mean + texture_se +
                     smoothness_se + symmetry_se + smoothness_mean, data = data[,-1],
                  family = binomial(link = "logit"), 
                  prior = t_prior, prior_intercept = t_prior, QR=TRUE,
-                 seed = SEED, iter = 2000, chain = 1)
+                 seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
 
@@ -106,28 +107,26 @@ car::vif(post2)
 
 ## Model diagnostics
 
+
 ```{r}
-library("bayesplot")
 color_scheme_set("red")
-mcmc_trace(post2, pars = c("texture_se"))
-mcmc_trace(post2, pars = c("symmetry_mean"))
+mcmc_trace(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"))
 ```
 
 ```{r}
-mcmc_acf(post2, pars = "symmetry_mean", lags = 10)
-mcmc_acf(post2, pars = "texture_se", lags = 10)
+mcmc_acf(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"), lags = 10)
 ```
 
 
 
 ```{r}
-#mcmc_areas(
-#  post2,
-#  pars = c("symmetry_mean", "texture_se"),
-#  prob = 0.8, # 80% intervals
-#  prob_outer = 0.99, # 99%
-#  point_est = "mean"
-#)
+pred <- posterior_predict(post2)
+dim(pred)
+mean(apply(pred, MARGIN = 1, sum))
+```
+
+```{r}
+summary(data$diagnosis)
 ```
 
 
