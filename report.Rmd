@@ -14,8 +14,9 @@ library(corrplot)
 library(rstanarm)
 library(patchwork)
 library(bayesplot)
+library(caret)
+library(loo)
 ```
-
 
 ## Introduction
 
@@ -61,7 +62,7 @@ data <- read.csv("data.csv")
 corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
 ```
 
-As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is the model is not interpretable. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we loose that advantage. So, instead, we use Variance inflation factor (VIF) as the criteria to remove multicollinearity.
+As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we loose that advantage. So, instead, we use Variance inflation factor (VIF) as the criteria to remove multicollinearity.
 
 ## Model
 
@@ -75,7 +76,6 @@ post1 <- stan_glm(diagnosis ~ ., data = data[,-1],
                  prior = t_prior, prior_intercept = t_prior, QR=TRUE,
                  seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
-
 
 ```{r}
 car::vif(post1)
@@ -91,43 +91,64 @@ post2 <- stan_glm(diagnosis ~ symmetry_mean + texture_se +
                  seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
-
 ```{r}
-#library(ggplot2)
-#pplot <- plot(post2, "areas", prob = 0.95, prob_outer = 1)
-#pplot + geom_vline(xintercept = 0)
+post3 <- stan_glm(diagnosis ~ symmetry_mean + texture_mean +
+                    area_mean + concavity_mean, data = data[,-1],
+                 family = binomial(link = "logit"), 
+                 prior = t_prior, prior_intercept = t_prior, QR=TRUE,
+                 seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
-
+Model coefficients and CI:
 ```{r}
-round(coef(post2), 2)
-round(posterior_interval(post2, prob = 0.9), 2)
-car::vif(post2)
+round(coef(post3), 2)
+round(posterior_interval(post3, prob = 0.9), 2)
+car::vif(post3)
 ```
 
 ## Model diagnostics
 
+```{r}
+#color_scheme_set("red")
+#mcmc_trace(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"))
+```
+
+```{r}
+#mcmc_acf(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"), lags = 10)
+```
 
 ```{r}
 color_scheme_set("red")
-mcmc_trace(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"))
+mcmc_trace(post3, pars = c("texture_mean", "symmetry_mean", "area_mean", "concavity_mean"))
 ```
 
 ```{r}
-mcmc_acf(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"), lags = 10)
+mcmc_acf(post3, pars = c("texture_mean", "symmetry_mean", "area_mean", "concavity_mean"), lags = 10)
 ```
 
+#### Posterior predictive diagnostics
 
+For posterior predictive checks, we used the 1000 posterior samples generated during the MCMC sampling to get our final prediction. Since each posterior sample contains predictions for all 569 observations, for each observation, we calculated the proportion of samples that are predicted to be malignant. If the proportion is above 0.5, then we conclude that this observation is a malignant case and benign otherwise. We can then generate a confusion matrix based on the final prediction to evaluate the performance of our model.
 
 ```{r}
-pred <- posterior_predict(post2)
-dim(pred)
-mean(apply(pred, MARGIN = 1, sum))
+pred <- posterior_predict(post3)
+pr <- factor(as.integer(colMeans(pred) >= 0.5))
+levels(pr) <- c("B", "M")
+caret::confusionMatrix(pr, data$diagnosis)[2]
+caret::confusionMatrix(pr, data$diagnosis)$overall["Accuracy"]
 ```
 
-```{r}
-summary(data$diagnosis)
+The accuracy of our predictions is about 92.8%. Even though our posterior predictive analysis shows that the model gives us very accurate predictions, there might be overfitting issues since we are testing on the training set, which is the dataset we used to fit our model earlier. So, to further test our posterior predictions and see if overfitting exists, we decided to use the `loo` package to perform a leave-one-out cross validation test.
+
+```{r message=FALSE, warning=FALSE}
+loo1 <- loo(post3, save_psis = TRUE)
+ploo <- E_loo(pred, loo1$psis_object, type="mean", log_ratios = -log_lik(post3))$value
+#round(mean(xor(ploo>0.5,as.integer(y==0))),2)
+mean(xor(ploo>0.5,as.integer(data$diagnosis=="B")))
+#mean( (ploo>0.5 & as.integer(data$diagnosis=="M")) | (ploo<0.5 & as.integer(data$diagnosis=="B")) )
 ```
+
+The result shows an accuracy of 92.6%, which is very close to the accuracy we got earlier when we tested the predictions using the training set. This indicates that our model indeed is a good fit.
 
 
 ## Results
