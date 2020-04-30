@@ -21,6 +21,9 @@ library(tidyverse)
 
 ## Introduction
 
+Breast cancer is one of the most prominent forms of cancer in the US and one of the deadliest besides lung cancer. In fact, about 1 in 8 US women will develop breast cancer in the course of their lifetime and the around 40,000 women are expected to die from breast cancer in 2020. Diagnosis of breast cancer involves an initial screening with mammogram for a tumor, followed by a biopsy of the cancerous tissue. Pathologists typically analyze the tissue, noting its size, shape, texture, and color, before determining whether the tumor is benign (harmless), or malignant (has metastasized). However, demands for automating this classification for basic tumors is rising as physicians are inundated with tests after tests in an aging US population. To improve efficiency of breast cancer diagnosis, it is good to develop a model that could analyze measurements regarding the tumor taken from images of these slides and accurately predict whether the tumor is benign or malignant. 
+
+To address this need, we will use the data from the Breast Cancer Wisconsin (Diagnostic) Data Set to develop a Bayesian logistic regression model that can accurately predict whether a tumor is benign or malignant, given the characteristic outputs provided by the image measurements. We will first generate a posterior logistic regression model including all 31 covariates present in the dataset, setting our prior initial estimates for the coefficients as the sample mean for each covariate. For the model generation, we plan on using MCMC sampling to determine the posterior coefficients. Since the data contains many highly correlated covariates, we will calculate the VIF for all the predictors, determine if there is a significant difference in M/B diagnostics for each predictor, and use both information to choose the most suitable predictors and remove the high VIF, non-significant predictors. Afterwards, we will update our model with only the significant predictors and perform the Bayesian analysis again to obtain the new posterior coefficients with confidence intervals. Next, we will evaluate our model by reducing autocorrelation (etc.). Finally, we will test this model through k-fold cross validation and observe our accuracy through ROC curves. Our goal is to develop an accurate logistic regression model that can accurately predict whether a tumor is malignant or benign given measurements in the Wisconsin dataset. This would help improve the efficiency of basic M/B diagnosis for breast cancer by automating the classification process. 
 
 ## Data
 
@@ -98,6 +101,7 @@ As we can see from the plot above, some predictors are highly correlated. One wa
 
 ## Model
 
+
 #### Model specification
 
 Since the variable we are interested in predicting in this problem is a binary variable, we chose to use a logistic regression model.
@@ -120,7 +124,8 @@ we can proceeds to prior specification and MCMC posterior inference of this logi
 We need a prior distribution
 
 
-This is posterior distribution that stan_glm will draw from when using MCMC.
+We are performing a Bayesian analysis of the coefficients for the covariates in a logistic regression model that can predict whether a tumor is malignant or benigh. We set our prior estimate for the coefficients as a vector of t-distribution's centered around 0. The prior estimates are centered around zero because we do not have enough information to knnow whether each covariate is a significant predictor for the diagnosis. We chose a t-distribution because we don't have enough prior information to say that the coefficient is close to 0. Our sampling probability model will be IID Bernouli distributions because the response variable (diagnosis) is binary. Then we obtain the posterior distribution for the coefficients via MCMC sampling. 
+Below is the posterior distribution that stan_glm will draw from when using MCMC.
 
 ```{r cache=TRUE}
 SEED=20200425
@@ -130,6 +135,8 @@ post1 <- stan_glm(diagnosis ~ ., data = data[,-1],
                  prior = t_prior, prior_intercept = t_prior, QR=TRUE,
                  seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
+
+Below is the posterior coefficients generated from our Bayesian logistic regression model containing all the predictors. 
 
 ```{r}
 car::vif(post1)
@@ -180,7 +187,11 @@ mcmc_trace(post3, pars = c("texture_mean", "symmetry_mean", "area_mean", "concav
 mcmc_acf(post3, pars = c("texture_mean", "symmetry_mean", "area_mean", "concavity_mean"), lags = 10)
 ```
 
-#### Posterior predictive diagnostics
+The traceplots for the coefficient of the four covariates indicates that there is immediate convergence and good mixing. This is backed up by the autocorrelation plots which show the autocorrelations greatly reduce between consecutive samples after only a few iterations. Thus, our model appears to have good performance with little to no burn-in before convergence as well as good mixing. 
+
+#### Results
+
+## Posterior predictive diagnostics
 
 For posterior predictive checks, we used the 1000 posterior samples generated during the MCMC sampling to get our final prediction. Since each posterior sample contains predictions for all 569 observations, for each observation, we calculated the proportion of samples that are predicted to be malignant. If the proportion is above 0.5, then we conclude that this observation is a malignant case and benign otherwise. We can then generate a confusion matrix based on the final prediction to evaluate the performance of our model.
 
@@ -202,10 +213,25 @@ mean(xor(ploo>0.5,as.integer(data$diagnosis=="B")))
 #mean( (ploo>0.5 & as.integer(data$diagnosis=="M")) | (ploo<0.5 & as.integer(data$diagnosis=="B")) )
 ```
 
-The result shows an accuracy of 92.6%, which is very close to the accuracy we got earlier when we tested the predictions using the training set. This indicates that our model indeed is a good fit.
+The result shows an accuracy of 92.6%, which is very close to the accuracy we got earlier when we tested the predictions using the training set. This indicates that our model indeed is a good fit for accurately predicting malignant vs benigh tumors. 
+
+## Model interpretation
 
 
-## Results
+```{r}
+round(coef(post3), 2)
+round(posterior_interval(post3, prob = 0.9), 2)
+car::vif(post3)
+```
+
+
+From the model coefficient and CI outputs, we see that:
+Intercept: At baseline when all other covariates are set to zero, the log odds of malignant over benigh tumor is -21.66 with 90% CI (-26.27, -17.78). This makes sense because we expect that a tumor with no area, texture, symmetry, and concavity would not appear to be a tumor at all and thus would be classified as benigh. 
+Symmetry: Holding all else constant, for every unit increase in symmetry_mean, the log odds that the tumor is malignant over benigh is expected to increase by 31.52, which 90% CI (16.94, 47.23). This suggests that the symmetry of the tumor is associated with a big role in diagnosing malignant tumors or benigh tumors. 
+Texture: Holding all else constant, for every unit increase in the mean texture (deviation from the gray scale), the log odds that the tumor is malignant over benigh is expected to increase by .28 with 90% CI (.21, .37). The low magnitude of the slope suggests that texture does not play as big of a role in favoring the odds of malignant over benigh diagnosis.
+Area: Holding all else constant, for every unit increase in the area of the tumor, the log odds that the tumor is malignant over benigh is expected to increase by 0.01 with a 90% CI (.01, .02). The magnitude of this slope is significant but very close to 0, indicating that area of the tumor does not play a big role in favoring the odds of malignant over benigh diagnosis. 
+Concavity: Holding all else constant, for every unit increase in the tumor's mean of severity of concave portions of the contour, the log odds that the tumor is malignant over benigh is expected to increase by 21.44, with 90% CI (15.33, 27.85). The large magnitude of this slope suggests that the severity of concave portions of the tumor plays a big role in favoring the odds of diagnosing malignant over benigh for a tumor. 
+
 
 
 ## Conclusion
