@@ -1,5 +1,5 @@
 ---
-title: "Final project report"
+title: "STA360 Final Project Report"
 author: "Tong Wu, Xi Pu"
 date: "4/15/2020"
 output: html_document
@@ -17,6 +17,7 @@ library(bayesplot)
 library(caret)
 library(loo)
 library(tidyverse)
+library(e1071)
 ```
 
 ## Introduction
@@ -59,6 +60,9 @@ resulting in 30 variables. For instance, field 3 is Mean Radius, field
 
 #### Exploratory data analysis
 
+For exploratory data analysis, we created a side-by-side boxplot for each covariate to see if there is any significant difference between malignant and benigh tumors.
+
+Since there are lots of covariates, we chose to display a few ones that show great difference: 
 ```{r eda}
 data <- read.csv("data.csv")
 area_plot <- data %>% ggplot(mapping = aes(y = area_mean, x = diagnosis)) + 
@@ -80,52 +84,53 @@ con_plot <- data %>% ggplot(mapping = aes(y = concavity_mean, x = diagnosis)) +
 (area_plot + sym_plot) / (txt_plot + con_plot)
 ```
 
+Another interesting pattern we observed is that 
+
 ```{r}
 data %>% ggplot(mapping = aes(y = texture_se, x = diagnosis)) + 
   geom_boxplot(alpha = 0.5) +
-  theme_bw()
-
-data %>% ggplot(mapping = aes(y = concavity_worst, x = diagnosis)) + 
+  theme_bw() + data %>% ggplot(mapping = aes(y = symmetry_se, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw() + data %>% ggplot(mapping = aes(y = smoothness_se, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw() + data %>% ggplot(mapping = aes(y = smoothness_se, x = diagnosis)) + 
   geom_boxplot(alpha = 0.5) +
   theme_bw()
 ```
 
-
-It’s important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset.
+It’s important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset. In addition, some variables are directly computed from other variables. For example, both 
 
 ```{r fig.height=7}
 corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
 ```
 
-As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we loose that advantage. So, instead, we use Variance inflation factor (VIF) as the criteria to remove multicollinearity.
+As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we lose that advantage. So, instead, we use the variance inflation factor (VIF) as the criteria to remove variables that cause multicollinearity.
 
 ## Model
 
-
 #### Model specification
 
-Since the variable we are interested in predicting in this problem is a binary variable, we chose to use a logistic regression model.
+Since the variable we are interested in predicting in this problem is a binary variable, we chose to perform a Bayesian analysis of the coefficients for the covariates in a logistic regression model that can predict whether a tumor is malignant or benigh. Our sampling probability model will be IID Bernouli distributions because the response variable (diagnosis) is binary: we assume that the binary response variable $Y_i$ follows a Bernoulli distribution with probability of success $p_i$ (success here means that the breast cancer case is malignant in the context of the problem). 
 
-We assume that the binary response variable $Y_i$ follows a Bernoulli distribution with probability of success $p_i$ (success here means that the breast cancer case is malignant in the context of the problem). 
-
-The link function we use:
+We use the logit function as our link function to connect our model parameter $p_i$ with the systematic component $\eta$:
 
 $$
 \text{logit}(p_i) = \log(\frac{p_i}{1-p_i})
 $$
 
+With this link function, we can then write our systematic component/regression model as following:
+
 $$
-\text{logit}(p_i) = \beta_0 + \beta_1X_1
+\eta = \text{logit}(p_i) = \boldsymbol{\beta}^T \boldsymbol{X} = \beta_1X_1 + \dots + \beta_nX_n \\
+\text{where }\boldsymbol{\beta} \text{ are the regression coefficients and }\boldsymbol{X} \text{ are the covariates}
 $$
 
+With all three ingredients (probability model, link function, and systematic component) ready, we can proceed to prior specification and MCMC posterior inference of this logistic regression model.
 
-we can proceeds to prior specification and MCMC posterior inference of this logistic regression model.
+#### Prior specification
 
-We need a prior distribution
-
-
-We are performing a Bayesian analysis of the coefficients for the covariates in a logistic regression model that can predict whether a tumor is malignant or benigh. We set our prior estimate for the coefficients as a vector of t-distribution's centered around 0. The prior estimates are centered around zero because we do not have enough information to knnow whether each covariate is a significant predictor for the diagnosis. We chose a t-distribution because we don't have enough prior information to say that the coefficient is close to 0. Our sampling probability model will be IID Bernouli distributions because the response variable (diagnosis) is binary. Then we obtain the posterior distribution for the coefficients via MCMC sampling. 
-Below is the posterior distribution that stan_glm will draw from when using MCMC.
+The first step is choosing a prior distribution for the set of regression coefficient parameters $\boldsymbol{\beta}$. We set our prior estimate for the coefficients as a vector of t-distribution's centered around 0 with 1 degree of freedom. The prior estimates are centered around zero because we do not have enough information to knnow whether each covariate is a significant predictor for the diagnosis. We chose a t-distribution over a normal distribution because t-distribution is more spread out, which reflects the fact that we don't have enough prior information to say that the coefficient is close to 0. With the same reason, we set the degree of freedom to be 1, a small number, to represent that we have a weak prior. Once we've set the prior distribution, we obtain the posterior distribution for the coefficients via MCMC sampling. 
+Below is the posterior distribution that `stan_glm` will draw from when using MCMC.
 
 ```{r cache=TRUE}
 SEED=20200425
