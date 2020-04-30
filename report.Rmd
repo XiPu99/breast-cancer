@@ -9,13 +9,14 @@ output: html_document
 knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 ```
 
-```{r}
+```{r packages}
 library(corrplot)
 library(rstanarm)
 library(patchwork)
 library(bayesplot)
 library(caret)
 library(loo)
+library(tidyverse)
 ```
 
 ## Introduction
@@ -55,16 +56,69 @@ resulting in 30 variables. For instance, field 3 is Mean Radius, field
 
 #### Exploratory data analysis
 
+```{r eda}
+data <- read.csv("data.csv")
+area_plot <- data %>% ggplot(mapping = aes(y = area_mean, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+
+sym_plot <- data %>% ggplot(mapping = aes(y = symmetry_mean, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+
+txt_plot <- data %>% ggplot(mapping = aes(y = texture_mean, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+
+con_plot <- data %>% ggplot(mapping = aes(y = concavity_mean, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+
+(area_plot + sym_plot) / (txt_plot + con_plot)
+```
+
+```{r}
+data %>% ggplot(mapping = aes(y = texture_se, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+
+data %>% ggplot(mapping = aes(y = concavity_worst, x = diagnosis)) + 
+  geom_boxplot(alpha = 0.5) +
+  theme_bw()
+```
+
+
 It’s important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset.
 
 ```{r fig.height=7}
-data <- read.csv("data.csv")
 corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
 ```
 
 As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we loose that advantage. So, instead, we use Variance inflation factor (VIF) as the criteria to remove multicollinearity.
 
 ## Model
+
+#### Model specification
+
+Since the variable we are interested in predicting in this problem is a binary variable, we chose to use a logistic regression model.
+
+We assume that the binary response variable $Y_i$ follows a Bernoulli distribution with probability of success $p_i$ (success here means that the breast cancer case is malignant in the context of the problem). 
+
+The link function we use:
+
+$$
+\text{logit}(p_i) = \log(\frac{p_i}{1-p_i})
+$$
+
+$$
+\text{logit}(p_i) = \beta_0 + \beta_1X_1
+$$
+
+
+we can proceeds to prior specification and MCMC posterior inference of this logistic regression model.
+
+We need a prior distribution
+
 
 This is posterior distribution that stan_glm will draw from when using MCMC.
 
