@@ -37,6 +37,14 @@ This dataset has 569 observations and 32 variables. Each observation contains in
  
 #### Data description
 
+There are 32 variables:
+
+```{r}
+data <- read.csv("data.csv")
+names(data)
+```
+
+
 Variable Information:
 1. ID number
 2. Diagnosis: a binary response variable that either takes value M or B (M = malignant, B = benign)
@@ -65,7 +73,6 @@ For exploratory data analysis, we created a side-by-side boxplot for each covari
 
 Since there are lots of covariates to plot, we chose to display a few ones that show significant difference: 
 ```{r eda}
-data <- read.csv("data.csv")
 area_plot <- data %>% ggplot(mapping = aes(y = area_mean, x = diagnosis)) + 
   geom_boxplot(alpha = 0.5) +
   theme_bw()
