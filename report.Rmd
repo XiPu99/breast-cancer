@@ -108,7 +108,7 @@ It’s also important to point out that since 20 of the 30 predictors were compu
 corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
 ```
 
-As we can see from the plot above, some predictors are highly correlated as expected. So we should not include all the predictors in our model due to multicollinearity. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we lose that advantage. So, instead, we use the variance inflation factor (VIF) as the criteria to remove variables that cause multicollinearity.
+As we can see from the plot above, some predictors are highly correlated as expected. So we should not include all the predictors in our model due to multicollinearity. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we lose that advantage. So, instead, we use the variance inflation factor (VIF) as the criteria to remove variables that cause multicollinearity. We will talk more about how we dealt with multicollinearity in the model section.
 
 ## Model
 
@@ -125,16 +125,17 @@ $$
 With this link function, we can then write our systematic component/regression model as following:
 
 $$
-\eta = \text{logit}(p_i) = \boldsymbol{\beta}^T \boldsymbol{X} = \beta_1X_1 + \dots + \beta_nX_n \\
-\text{where }\boldsymbol{\beta} \text{ are the regression coefficients and }\boldsymbol{X} \text{ are the covariates}
+\begin{aligned}
+\eta &= \text{logit}(p_i) = \boldsymbol{\beta}^T \boldsymbol{X} = \beta_1X_1 + \dots + \beta_nX_n \\
+&\text{where }\boldsymbol{\beta} \text{ are the regression coefficients and }\boldsymbol{X} \text{ are the covariates}
+\end{aligned}
 $$
 
 With all three ingredients (probability model, link function, and systematic component) ready, we can proceed to prior specification and MCMC posterior inference of this logistic regression model.
 
 #### Prior specification
 
-The first step is choosing a prior distribution for the set of regression coefficient parameters $\boldsymbol{\beta}$. We set our prior estimate for the coefficients as a vector of t-distribution's centered around 0 with 1 degree of freedom. The prior estimates are centered around zero because we do not have enough information to knnow whether each covariate is a significant predictor for the diagnosis. We chose a t-distribution over a normal distribution because t-distribution is more spread out, which reflects the fact that we don't have enough prior information to say that the coefficient is close to 0. With the same reason, we set the degree of freedom to be 1, a small number, to represent that we have a weak prior. Once we've set the prior distribution, we obtain the posterior distribution for the coefficients via MCMC sampling. 
-Below is the posterior distribution that `stan_glm` will draw from when using MCMC.
+The first step is choosing a prior distribution for the set of regression coefficient parameters $\boldsymbol{\beta}$. We set our prior estimate for the coefficients as a vector of t-distribution's centered around 0 with 1 degree of freedom. The prior estimates are centered around zero because we do not have enough information to knnow whether each covariate is a significant predictor for the diagnosis. We chose a t-distribution over a normal distribution because t-distribution is more spread out, which reflects the fact that we don't have enough prior information to say that the coefficient is close to 0. With the same reason, we set the degree of freedom to be 1, a small number, to represent that we have a weak prior.
 
 ```{r cache=TRUE}
 SEED=20200425
@@ -144,6 +145,8 @@ post1 <- stan_glm(diagnosis ~ ., data = data[,-1],
                  prior = t_prior, prior_intercept = t_prior, QR=TRUE,
                  seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
+
+#### Dealing with multicollinearity
 
 Since the data has many highly correlated predictors, we sought to deal with issues of multicolinearity by removing predictors based off high VIF values. Below is VIF values for each covariate. 
 
@@ -160,8 +163,11 @@ car::vif(post1)
                  #seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
-Taking into account the significant differences in the boxplots for each covariate, as well as their VIF's, we chose 4 predictors that had significant difference between malignant vs benigh and had low vif values: symmetry_mean, texture_mean, area_mean, concavity_mean. Below is the posterior distribution for those four predictors generated from MCMC sampling.
+Taking into account the significant differences in the boxplots for each covariate, as well as their VIF's, we chose 4 predictors that had significant difference between malignant vs benigh and had low vif values: `symmetry_mean`, `texture_mean`, `area_mean`, `concavity_mean`. 
 
+#### Posterior model
+
+Once we've set the prior distribution and dealt with multicollinearity, we obtain the posterior distribution for the coefficients via MCMC sampling by using the `rstanarm` package. Below is the posterior distribution for those four predictors generated from MCMC sampling.
 
 ```{r}
 post3 <- stan_glm(diagnosis ~ symmetry_mean + texture_mean +
@@ -171,14 +177,14 @@ post3 <- stan_glm(diagnosis ~ symmetry_mean + texture_mean +
                  seed = SEED, iter = 2000, chain = 1, refresh = 0)
 ```
 
-Below is the model coefficients and CI:
+Below is the model coefficients, CI and VIFs for each covariate:
 ```{r}
 round(coef(post3), 2)
 round(posterior_interval(post3, prob = 0.9), 2)
 car::vif(post3)
 ```
 
-This is the posterior coefficients for the final model logistic regression model generated from our Bayesian analysis. Now we will look at model diagnostics.
+This is the posterior coefficients for the final model logistic regression model generated from our Bayesian analysis. None of the confidence intervals contains 0, which indicates that all our coefficients are significant. All the VIF values are below 5, which suggests that there is no multicollinearity issue. sNow we will look at model diagnostics.
 
 #### Model diagnostics
 
@@ -236,11 +242,9 @@ The result shows an accuracy of 92.6%, which is very close to the accuracy we go
 
 #### Model interpretation
 
-
 ```{r}
 round(coef(post3), 2)
 round(posterior_interval(post3, prob = 0.9), 2)
-car::vif(post3)
 ```
 
 
@@ -255,7 +259,7 @@ Concavity: Holding all else constant, for every unit increase in the tumor's mea
 
 We generated a logsitic regression model using Bayesian analysis and were able predict the diagnosis of the breast tumors with great accuracy. Our model was able to predict our training data with 92.8% accuracy according to the confusion matrix. When leave one out cross validation test was performed, our model still performed accurately, with 92.6% accuracy based on the confusion matrix. 
 Based on the posterior coefficients for the predictors generated, we can see that the more symmetric and more concavity a breast tumor is, the more likely it is expected to be a malignant diagnosis. These two characteristics had strong influence on whether the tumor is malignant or benigh. Increases in area of the tumor and deviation from the gray scale indicating greater texture also play a smaller, but still significant role in tipping the odds towards malignant diagnosis over benigh. 
-Overall, these findiings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
+Overall, these findings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
 
 
 
