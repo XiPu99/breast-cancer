@@ -177,6 +177,7 @@ car::vif(post3)
 
 ## Model diagnostics
 
+For model diagnostics, we created traceplots and autocorrelation plots to check MCMC convergence and mixing performance:
 ```{r}
 #color_scheme_set("red")
 #mcmc_trace(post2, pars = c("texture_se", "symmetry_mean", "smoothness_se", "smoothness_mean"))
