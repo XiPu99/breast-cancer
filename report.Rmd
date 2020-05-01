@@ -60,9 +60,9 @@ resulting in 30 variables. For instance, field 3 is Mean Radius, field
 
 #### Exploratory data analysis
 
-For exploratory data analysis, we created a side-by-side boxplot for each covariate to see if there is any significant difference between malignant and benigh tumors.
+For exploratory data analysis, we created a side-by-side boxplot for each covariate to see if there is any significant difference in the distribution of the covariate between malignant and benigh tumors. This helps us identify potentially significant predictors.
 
-Since there are lots of covariates, we chose to display a few ones that show great difference: 
+Since there are lots of covariates to plot, we chose to display a few ones that show significant difference: 
 ```{r eda}
 data <- read.csv("data.csv")
 area_plot <- data %>% ggplot(mapping = aes(y = area_mean, x = diagnosis)) + 
@@ -84,7 +84,8 @@ con_plot <- data %>% ggplot(mapping = aes(y = concavity_mean, x = diagnosis)) +
 (area_plot + sym_plot) / (txt_plot + con_plot)
 ```
 
-Another interesting pattern we observed is that 
+
+For other covariates, the boxplots do not show significant difference between malignant and benigh tumors. Some examples are shown below:
 
 ```{r}
 data %>% ggplot(mapping = aes(y = texture_se, x = diagnosis)) + 
@@ -93,18 +94,20 @@ data %>% ggplot(mapping = aes(y = texture_se, x = diagnosis)) +
   geom_boxplot(alpha = 0.5) +
   theme_bw() + data %>% ggplot(mapping = aes(y = smoothness_se, x = diagnosis)) + 
   geom_boxplot(alpha = 0.5) +
-  theme_bw() + data %>% ggplot(mapping = aes(y = smoothness_se, x = diagnosis)) + 
+  theme_bw() + data %>% ggplot(mapping = aes(y = fractal_dimension_se, x = diagnosis)) + 
   geom_boxplot(alpha = 0.5) +
   theme_bw()
 ```
 
-It’s important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset. In addition, some variables are directly computed from other variables. For example, both 
+Another interesting pattern we observed is that boxplots for variables with the "se" suffix do not show as much difference between malignant and benigh tumors compared to the corresponding variabless with the "mean" suffix. This implies that the standard error data is less informative than the mean data in terms of distinguish between a malignant and benigh tumor.
+
+It’s also important to point out that since 20 of the 30 predictors were computed from data, high multicollinearity exists in this dataset. In addition, some variables are directly computed from other variables. For example, both `area_mean` and `perimeter_mean` are calculated by using `radius_mean`. To examine this issue further, we created a correlation plot as shown below.
 
 ```{r fig.height=7}
 corrplot(cor(data[,-1:-2]), method = "color", tl.col="black", tl.srt=45)
 ```
 
-As we can see from the plot above, some predictors are highly correlated. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we lose that advantage. So, instead, we use the variance inflation factor (VIF) as the criteria to remove variables that cause multicollinearity.
+As we can see from the plot above, some predictors are highly correlated as expected. So we should not include all the predictors in our model due to multicollinearity. One way we can deal with this is transforming the predictors using principal component analysis(PCA). We can then perform logistic regression on PCA transformed variables. However, the problem is that the model is not interpretable if we use PCA transformed variables. One of the biggest advantage of logistic regression is interpretability. By using PCA variables, we lose that advantage. So, instead, we use the variance inflation factor (VIF) as the criteria to remove variables that cause multicollinearity.
 
 ## Model
 
