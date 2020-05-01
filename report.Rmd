@@ -23,9 +23,9 @@ library(pROC)
 
 ## Introduction
 
-Breast cancer is one of the most prominent forms of cancer in the US and one of the deadliest besides lung cancer. In fact, about 1 in 8 US women will develop breast cancer in the course of their lifetime and the around 40,000 women are expected to die from breast cancer in 2020. Diagnosis of breast cancer involves an initial screening with mammogram for a tumor, followed by a biopsy of the cancerous tissue. Pathologists typically analyze the tissue, noting its size, shape, texture, and color, before determining whether the tumor is benign (harmless), or malignant (has metastasized). However, demands for automating this classification for basic tumors is rising as physicians are inundated with tests after tests in an aging US population. To improve efficiency of breast cancer diagnosis, it is good to develop a model that could analyze measurements regarding the tumor taken from images of these slides and accurately predict whether the tumor is benign or malignant. 
+Breast cancer is one of the most prominent forms of cancer in the US and one of the deadliest besides lung cancer. In fact, about 1 in 8 US women will develop breast cancer in the course of their lifetime and the around 40,000 women are expected to die from breast cancer in 2020 [1]. Diagnosis of breast cancer involves an initial screening with mammogram for a tumor, followed by a biopsy of the cancerous tissue, such as through fine needle aspiration of the breast mass. Pathologists typically analyze the tissue, noting its size, shape, texture, and color, before determining whether the tumor is benign (harmless), or malignant (has metastasized). However, demands for automating this classification for basic tumors is rising as physicians are inundated with tests after tests in an aging US population [2]. To improve efficiency of breast cancer diagnosis, it is good to develop a model that could analyze measurements regarding the tumor taken from images of these slides and accurately predict whether the tumor is benign or malignant. 
 
-To address this need, we will use the data from the Breast Cancer Wisconsin (Diagnostic) Data Set to develop a Bayesian logistic regression model that can accurately predict whether a tumor is benign or malignant, given the characteristic outputs provided by the image measurements. We will first generate a posterior logistic regression model including all 31 covariates present in the dataset, setting our prior initial estimates for the coefficients as the sample mean for each covariate. For the model generation, we plan on using MCMC sampling to determine the posterior coefficients. Since the data contains many highly correlated covariates, we will calculate the VIF for all the predictors, determine if there is a significant difference in M/B diagnostics for each predictor based on boxplots, and use both information to choose the most suitable predictors and remove the high VIF, non-significant predictors. Afterwards, we will update our model with only the significant predictors and perform the Bayesian analysis again to obtain the new posterior coefficients with confidence intervals. Next, we will evaluate our MCMC model to determine if there is good convergence and mixing. Finally, we will test this model's performance on our training data and through leave one out cross-validation test. We will determine our accuracy by generating confusion matrices for the training dataset and cross-validatino test. Our goal is to develop an accurate logistic regression model that can accurately predict whether a tumor is malignant or benign given measurements in the Wisconsin dataset. This would help improve the efficiency of basic M/B diagnosis for breast cancer by automating the classification process. 
+To address this need, we will use the data from the fine needle aspirate of breasts mass in the Breast Cancer Wisconsin (Diagnostic) Data Set to develop a Bayesian logistic regression model that can accurately predict whether a tumor is benign or malignant, given the characteristic outputs provided by the image measurements from the mass tissues. We will first generate a posterior logistic regression model including all 31 covariates present in the dataset, setting our prior initial estimates for the coefficients as the sample mean for each covariate. For the model generation, we plan on using MCMC sampling to determine the posterior coefficients. Since the data contains many highly correlated covariates, we will calculate the VIF for all the predictors, determine if there is a significant difference in distribution of covariates between the malignant and benigh groups based on boxplots, and use both information to choose the most suitable predictors and remove the high VIF, non-significant predictors. Afterwards, we will update our model with only the significant predictors and perform the Bayesian analysis again to obtain the new posterior coefficients with confidence intervals. Next, we will evaluate our MCMC model to determine if there is good convergence and mixing. Finally, we will test this model's performance on our training data and through leave one out cross-validation test. We will determine our accuracy by generating confusion matrix for the training dataset and cross-validatino test, then accuracy will also be computed. Our goal is to develop an accurate logistic regression model that can accurately predict whether a tumor is malignant or benign given measurements in the Wisconsin dataset. This would help improve the efficiency of basic M/B diagnosis for breast cancer by automating the classification process. 
 
 ## Data
 
@@ -37,31 +37,24 @@ This dataset has 569 observations and 32 variables. Each observation contains in
  
 #### Data description
 
-There are 32 variables:
-
 ```{r}
 data <- read.csv("data.csv")
-names(data)
 ```
 
+There are 32 variabless in this dataset. The first variable `id` is the ID number used to identify a specific observation. The second variable `diagnosis` is a binary response variable that either takes value M or B (M = malignant, B = benign). 
 
-Variable Information:
-1. ID number
-2. Diagnosis: a binary response variable that either takes value M or B (M = malignant, B = benign)
-
-__3-32)__
-
-Ten numeric values are computed for each cell nucleus:
+The rest of the variables are numeric values computed for each cell nucleus:
   1. radius (mean of distances from center to points on the perimeter)
   2. texture (standard deviation of gray-scale values)
-  3. perimeter
-  4. area
+  3. perimeter (mean size of the core tumor)
+  4. area (of tumor)
   5. smoothness (local variation in radius lengths)
   6. compactness (perimeter^2 / area - 1.0)
   7. concavity (severity of concave portions of the contour)
   8. concave points (number of concave portions of the contour)
-  9. symmetry
+  9. symmetry (of the tumor)
   10. fractal dimension ("coastline approximation" - 1)
+  
 The mean, standard error and "worst" or largest (mean of the three
 largest values) of these features were computed for each image,
 resulting in 30 variables. For instance, field 3 is Mean Radius, field
@@ -235,7 +228,7 @@ par(pty="s")
 roc(t, p, plot=TRUE, legacy.axes=TRUE)
 ```
 
-The accuracy of our predictions is about 92.8%, and the area under the curve was .9814. Even though our posterior predictive analysis shows that the model gives us very accurate predictions, there might be overfitting issues since we are testing on the training set, which is the dataset we used to fit our model earlier. So, to further test our posterior predictions and see if overfitting exists, we decided to use the `loo` package to perform a leave-one-out cross validation test.
+The accuracy of our predictions is about 92.97%, and the area under the curve from ROC was .9814. Even though our posterior predictive analysis shows that the model gives us very accurate predictions, there might be overfitting issues since we are testing on the training set, which is the dataset we used to fit our model earlier. So, to further test our posterior predictions and see if overfitting exists, we decided to use the `loo` package to perform a leave-one-out cross validation test.
 
 ```{r message=FALSE, warning=FALSE}
 loo1 <- loo(post3, save_psis = TRUE)
@@ -245,7 +238,7 @@ mean(xor(ploo>0.5,as.integer(data$diagnosis=="B")))
 #mean( (ploo>0.5 & as.integer(data$diagnosis=="M")) | (ploo<0.5 & as.integer(data$diagnosis=="B")) )
 ```
 
-The result shows an accuracy of 92.6%, which is very close to the accuracy we got earlier when we tested the predictions using the training set. This indicates that our model indeed is a good fit for accurately predicting malignant vs benigh tumors. 
+The result shows an accuracy of 92.79%, which is very close to the accuracy we got earlier when we tested the predictions using the training set. This indicates that our model indeed is a good fit for accurately predicting malignant vs benigh tumors. 
 
 #### Model interpretation
 
@@ -264,9 +257,14 @@ Concavity: Holding all else constant, for every unit increase in the tumor's mea
 
 ## Conclusion
 
-We generated a logsitic regression model using Bayesian analysis and were able predict the diagnosis of the breast tumors with great accuracy. Our model was able to predict our training data with 92.8% accuracy according to the confusion matrix. When leave one out cross validation test was performed, our model still performed accurately, with 92.6% accuracy based on the confusion matrix. 
-Based on the posterior coefficients for the predictors generated, we can see that the more symmetric and more concavity a breast tumor is, the more likely it is expected to be a malignant diagnosis. These two characteristics had strong influence on whether the tumor is malignant or benigh. Increases in area of the tumor and deviation from the gray scale indicating greater texture also play a smaller, but still significant role in tipping the odds towards malignant diagnosis over benigh. 
-Overall, these findings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
+We generated a logsitic regression model using Bayesian analysis and were able predict the diagnosis of the breast tumors with great accuracy. Our model was able to predict our training data with 92.97% accuracy according to the confusion matrix. When leave one out cross validation test was performed, our model still performed with 92.79% accuracy. 
+Based on the posterior coefficients for the predictors generated, we can see that the more symmetric and more concavity a breast tumor is, the more likely it is expected to be a malignant diagnosis. These two characteristics have strong influence on whether the tumor is malignant or benigh. Increases in area of the tumor and deviation from the gray scale indicating greater texture also play a smaller, but still significant role in tipping the odds towards malignant diagnosis over benigh. 
+Overall, these findiings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
+
+## References
+
+1. https://www.breastcancer.org/symptoms/understand_bc/statistics
+2. M. Chang, R. J. Dalpatadu, D. Phanord, and A. K. Singh, “Breast Cancer Prediction Using Bayesian Logistic Regression,” vol. 2, p. 5.
 
 
 
