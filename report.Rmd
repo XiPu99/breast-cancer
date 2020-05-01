@@ -259,7 +259,7 @@ Concavity: Holding all else constant, for every unit increase in the tumor's mea
 
 We generated a logsitic regression model using Bayesian analysis and were able predict the diagnosis of the breast tumors with great accuracy. Our model was able to predict our training data with 92.97% accuracy according to the confusion matrix. When leave one out cross validation test was performed, our model still performed with 92.79% accuracy. 
 Based on the posterior coefficients for the predictors generated, we can see that the more symmetric and more concavity a breast tumor is, the more likely it is expected to be a malignant diagnosis. These two characteristics have strong influence on whether the tumor is malignant or benigh. Increases in area of the tumor and deviation from the gray scale indicating greater texture also play a smaller, but still significant role in tipping the odds towards malignant diagnosis over benigh. 
-Overall, these findiings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
+Overall, these findings demonstrate that we have succeeded in achieving our goal of developing a logisitc regression model that can accurately predict the diagnosis of breast cancer tumor masses in the Wisconsin Dataset. We hope this model has the potential to improve the efficiency of basic breast cancer diagnosis.
 
 ## References
 
